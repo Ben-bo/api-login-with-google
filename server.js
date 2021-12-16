@@ -7,7 +7,7 @@ require("./config/db.config");
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
-
+require("./app/routes/user.route")(app);
 app.use("/", (req, res) => {
   res.send({
     status: 500,
