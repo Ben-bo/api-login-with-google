@@ -2,6 +2,10 @@ const model = require("../models");
 const userModel = model.users;
 const bcrypt = require("bcrypt");
 const jwt = require("jsonwebtoken");
+const { OAuth2Client } = require("google-auth-library");
+const client = new OAuth2Client(
+  process.env.CLIENT_ID //client ID dari project mern-login bagian credential
+);
 const authService = {
   findByUsername: async (email) => {
     return await userModel.findOne({ email: email }).exec();
@@ -48,7 +52,7 @@ const authService = {
       );
 
       if (!isUserExist) {
-        error = "user not registered";
+        error = "email not registered";
         return {
           data: {},
           error,
@@ -68,6 +72,74 @@ const authService = {
       result = await jwt.sign(isUserExist.dataValues, "secret_key"); //buat token(identitas) dari data user(database)
       return {
         data: result,
+        error,
+      };
+    } catch (error) {
+      console.log(error);
+      return error;
+    }
+  },
+  loginGoogleService: async (dataBody) => {
+    try {
+      let error = null;
+      let result = {};
+      let user = null;
+
+      const { tokenId } = dataBody; //tokenId dari google login
+
+      const verify = await client.verifyIdToken({
+        idToken: tokenId,
+        audience: process.env.CLIENT_ID, //client ID from console.google
+      });
+      //ambill email name dan email verif dari token yang di kirim oleh front end
+      const { email_verified, name, email } = verify.payload;
+      if (email_verified) {
+        const cekUser = await userModel.findOne({ email }).exec(); //cek email di dalam db
+        if (cekUser) {
+          const token = jwt.sign({ id: cekUser._id }, process.env.SECRET_KEY, {
+            expiresIn: "7d",
+          });
+          const { _id, nama, email } = cekUser;
+          result = token;
+          user = {
+            id: _id,
+            nama,
+            email,
+          };
+        } else {
+          const saltRounds = 10;
+          const salt = await bcrypt.genSaltSync(saltRounds);
+          const password = email + process.env.SECRET_KEY;
+          const hashedPassword = await bcrypt.hashSync(password, salt); //ecnrypt password
+          const data = {
+            email,
+            nama: name,
+            password: hashedPassword,
+          };
+          const postData = new userModel(data);
+          const saveData = await postData.save();
+          if (saveData) {
+            const token = jwt.sign(
+              { id: saveData._id },
+              process.env.SECRET_KEY,
+              {
+                expiresIn: "7d",
+              }
+            );
+
+            result = token;
+            user = {
+              id: saveData._id,
+              nama: saveData.nama,
+              email: saveData.email,
+            };
+          }
+        }
+      }
+
+      return {
+        data: result,
+        user,
         error,
       };
     } catch (error) {

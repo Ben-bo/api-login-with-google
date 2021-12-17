@@ -1,9 +1,11 @@
 const express = require("express");
 require("dotenv").config();
+var cors = require("cors");
 const app = express();
 const PORT = process.env.PORT;
 //connect dalam database
 require("./config/db.config");
+app.use(cors());
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
